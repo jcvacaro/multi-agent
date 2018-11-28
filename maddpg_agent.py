@@ -13,7 +13,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 class AgentNetwork:
     """Individual network settings for each actor + critic pair."""
 
-    def __init__(self, in_actor, hidden_in_actor, hidden_out_actor, out_actor, in_critic, hidden_in_critic, hidden_out_critic, lr_actor=1.0e-2, lr_critic=1.0e-2):
+    def __init__(self, in_actor, hidden_in_actor, hidden_out_actor, out_actor, 
+                 in_critic, hidden_in_critic, hidden_out_critic, 
+                 lr_actor, lr_critic):
         super(AgentNetwork, self).__init__()
 
         self.actor = Network(in_actor, hidden_in_actor, hidden_out_actor, out_actor, actor=True).to(device)
@@ -81,8 +83,8 @@ class Agent():
 
         # Agents
         critic_size = num_agents * (action_size + state_size)
-        self.agents = [AgentNetwork(state_size, 3*state_size, 2*state_size, action_size, 
-                                    critic_size, 3*critic_size, 2*critic_size, 
+        self.agents = [AgentNetwork(state_size, 400, 300, action_size, 
+                                    critic_size, 400, 300, 
                                     lr_actor=lr_actor, lr_critic=lr_critic) for i in range(num_agents)]
 
         # Noise process
@@ -100,15 +102,16 @@ class Agent():
         if self.n_step == 0:
             # Learn, if enough samples are available in memory
             if len(self.memory) > self.batch_size:
-                experiences = self.memory.sample()
                 for i in range(self.sgd_epoch):
                     for a_i in range(self.num_agents):
+                        experiences = self.memory.sample()
                         self.learn(experiences, a_i)
-                        
-                # noise update
-                self.noise *= self.noise_decay
-                # soft update the target network towards the actual networks
-                self.update_targets()
+                    # soft update the target network towards the actual networks
+                    self.update_targets()
+
+    def reset(self):
+        self.noise.reset()
+        self.noise *= self.noise_decay
 
     def get_actors(self):
         """get actors of all the agents in the MADDPG object"""
@@ -127,30 +130,37 @@ class Agent():
         actions = torch.stack(action_list, dim=-1).to(device)
         if add_noise:
             actions += self.noise * torch.tensor(self.ounoise.noise(), dtype=torch.float).to(device)
-            actions = torch.clamp(actions, -1, 1)
+        actions = torch.clamp(actions, -1, 1).to(device)
         if to_numpy:
             actions = actions.cpu().data.numpy()
         return actions
         
-    def act(self, state, add_noise=True, to_numpy=True):
+    def act(self, state):
         """get actions from all agents in the MADDPG object"""
-        return self._act(self.get_actors(), state, add_noise, to_numpy)
+        actors = self.get_actors()
+        for actor in actors: actor.eval()
+        with torch.no_grad():
+            actions = self._act(actors, state, add_noise=False, to_numpy=True)
+        for actor in actors: actor.train()
+        return actions
 
     def target_act(self, state, add_noise=True, to_numpy=True):
         """get actions from all agents in the MADDPG object"""
-        return self._act(self.get_target_actors(), state, add_noise, to_numpy)
+        return self._act(self.get_target_actors(), state, add_noise=True, to_numpy=False)
 
     def learn(self, experiences, agent_number):
         """update the critics and actors of all the agents """
         states, actions, rewards, next_states, dones = experiences
-        states_i, actions_i, rewards_i, next_states_i, dones_i = map(lambda x: x[:,agent_number], experiences)
+        rewards = normalize_rewards(rewards)
+        states_i, actions_i, rewards_i, next_states_i, dones_i = \
+            states[:,agent_number], actions[:,agent_number], rewards[:,agent_number], next_states[:,agent_number], dones[:,agent_number]
         agent = self.agents[agent_number]
         
         # critic loss = batch mean of (y- Q(s,a) from target network)^2
         agent.critic_optimizer.zero_grad()
 
         # y = reward of this timestep + discount * Q(st+1,at+1) from target network
-        target_actions = self.target_act(next_states, to_numpy=False)
+        target_actions = self.target_act(next_states)
         target_critic_input = torch.cat([next_states.view(self.batch_size, -1), target_actions.view(self.batch_size, -1)], dim=1).to(device)
         with torch.no_grad():
             q_next = agent.target_critic(target_critic_input)
@@ -161,30 +171,29 @@ class Agent():
         q = agent.critic(critic_input)
 
         # critic loss
-        huber_loss = torch.nn.SmoothL1Loss()
-        critic_loss = huber_loss(q, y.detach())
+        #huber_loss = torch.nn.SmoothL1Loss()
+        #critic_loss = huber_loss(q, y.detach())
+        critic_loss = F.mse_loss(q, y.detach())
         agent.critic_loss = critic_loss
         critic_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(agent.critic.parameters(), 0.5)
+        if self.clip_critic > 0:
+            torch.nn.utils.clip_grad_norm_(agent.critic.parameters(), self.clip_critic)
         agent.critic_optimizer.step()
-
+        
         #update actor network using policy gradient
         agent.actor_optimizer.zero_grad()
 
         # make input to agent
-        # detach the other agents to save computation
-        # saves some time for computing derivative
         q_input = [self.agents[i].actor(states[:,i]) if i == agent_number
                    else self.agents[i].actor(states[:,i]).detach()
                    for i in range(self.num_agents)]
         q_input = torch.stack(q_input, dim=-1).to(device)
-        
+
         # combine all the actions and observations for input to critic
-        # many of the obs are redundant, and obs[1] contains all useful information already
-        q_input2 = torch.cat([states.view(self.batch_size, -1), q_input.view(self.batch_size, -1)], dim=1).to(device)
+        q_input = torch.cat([states.view(self.batch_size, -1), q_input.view(self.batch_size, -1)], dim=1).to(device)
         
         # get the policy gradient
-        actor_loss = -agent.critic(q_input2).mean()
+        actor_loss = -agent.critic(q_input).mean()
         agent.actor_loss = actor_loss
         actor_loss.backward()
         #torch.nn.utils.clip_grad_norm_(agent.actor.parameters(),0.5)

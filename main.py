@@ -14,7 +14,7 @@ import maddpg_agent as maddpg
 # Arguments Parsing Settings
 parser = argparse.ArgumentParser(description="DQN Reinforcement Learning Agent")
 
-parser.add_argument('--seed', help="Seed for random number generation", type=int, default=1)
+parser.add_argument('--seed', help="Seed for random number generation", type=int, default=13)
 parser.add_argument('--env', help="The environment path", default="Tennis/Tennis.app")
 parser.add_argument('--checkpoint_prefix', help="The string prefix for saving checkpoint files", default="Tennis")
 
@@ -22,17 +22,17 @@ parser.add_argument('--checkpoint_prefix', help="The string prefix for saving ch
 parser.add_argument('--train', help="train or test (flag)", action="store_true")
 parser.add_argument('--algorithm', choices=["maddpg"], help="The algorithm", default="maddpg")
 parser.add_argument('--test_episodes', help="The number of episodes for testing", type=int, default=3)
-parser.add_argument('--train_episodes', help="The number of episodes for training", type=int, default=500)
+parser.add_argument('--train_episodes', help="The number of episodes for training", type=int, default=3500)
 parser.add_argument('--batch_size', help="The mini batch size", type=int, default=128)
-parser.add_argument('--noise', help="The amplitude of OU noise for action exploration", type=float, default=2)
+parser.add_argument('--noise', help="The amplitude of OU noise for action exploration", type=float, default=0)
 parser.add_argument('--noise_decay', help="The noise coefficient decay", type=float, default=0.9999)
 parser.add_argument('--gamma', help="The reward discount factor", type=float, default=0.99)
 parser.add_argument('--lr_actor', help="The learning rate for the actor", type=float, default=1e-4)
-parser.add_argument('--lr_critic', help="The learning rate for the critic", type=float, default=1e-4)
+parser.add_argument('--lr_critic', help="The learning rate for the critic", type=float, default=1e-3)
 parser.add_argument('--clip_critic', help="The clip value for updating grads", type=float, default=1)
-parser.add_argument('--tau', help="For soft update of target parameters", type=float, default=1e-2)
-parser.add_argument('--weight_decay', help="The weight decay", type=float, default=1e-7)
-parser.add_argument('--update_network_steps', help="How often to update the network", type=int, default=4)
+parser.add_argument('--tau', help="For soft update of target parameters", type=float, default=0.02)
+parser.add_argument('--weight_decay', help="The weight decay", type=float, default=25e-5)
+parser.add_argument('--update_network_steps', help="How often to update the network", type=int, default=1)
 parser.add_argument('--sgd_epoch', help="Number of iterations for each network update", type=int, default=1)
 
 # replay memory 
@@ -70,6 +70,7 @@ def test(agent, env, brain, brain_name, num_agents, n_episodes):
     agent.load_checkpoint()                                     # loads a pth checkpoint 
 
     for i_episode in range(1, n_episodes+1):
+        agent.reset()
         env_info = env.reset(train_mode=False)[brain_name]      # reset the environment
         states = env_info.vector_observations                   # get initial observation
         scores = np.zeros(num_agents)                           # initialize the score (for each agent)
@@ -100,6 +101,7 @@ def train(agent, env, brain, brain_name, num_agents, n_episodes):
     scores_window = deque(maxlen=100)                           # last 100 scores
 
     for i_episode in range(1, n_episodes+1):
+        agent.reset()
         env_info = env.reset(train_mode=True)[brain_name]       # reset the environment
         states = env_info.vector_observations                   # get initial observation
         scores = np.zeros(num_agents)                           # initialize the score (for each agent)
