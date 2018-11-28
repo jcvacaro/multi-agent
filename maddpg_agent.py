@@ -110,7 +110,7 @@ class Agent():
                     self.update_targets()
 
     def reset(self):
-        self.noise.reset()
+        self.ounoise.reset()
         self.noise *= self.noise_decay
 
     def get_actors(self):
