@@ -5,7 +5,8 @@ import torch.optim as optim
 import random
 
 from utils import *
-from network import Network
+#from network import Network
+from model import Actor, Critic
 from OUNoise import OUNoise
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -13,15 +14,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 class AgentNetwork:
     """Individual network settings for each actor + critic pair."""
 
-    def __init__(self, in_actor, hidden_in_actor, hidden_out_actor, out_actor, 
-                 in_critic, hidden_in_critic, hidden_out_critic, 
-                 lr_actor, lr_critic):
+    def __init__(self, num_agents, state_size, action_size, seed, lr_actor, lr_critic):
         super(AgentNetwork, self).__init__()
 
-        self.actor = Network(in_actor, hidden_in_actor, hidden_out_actor, out_actor, actor=True).to(device)
-        self.critic = Network(in_critic, hidden_in_critic, hidden_out_critic, 1).to(device)
-        self.target_actor = Network(in_actor, hidden_in_actor, hidden_out_actor, out_actor, actor=True).to(device)
-        self.target_critic = Network(in_critic, hidden_in_critic, hidden_out_critic, 1).to(device)
+        self.actor = Actor(state_size, action_size, seed).to(device)
+        self.critic = Critic(num_agents * state_size, num_agents * action_size, seed).to(device)
+        self.target_actor = Actor(state_size, action_size, seed).to(device)
+        self.target_critic = Critic(num_agents * state_size, num_agents * action_size, seed).to(device)
 
         # initialize targets same as original networks
         hard_update(self.target_actor, self.actor)
@@ -83,8 +82,7 @@ class Agent():
 
         # Agents
         critic_size = num_agents * (action_size + state_size)
-        self.agents = [AgentNetwork(state_size, 400, 300, action_size, 
-                                    critic_size, 400, 300, 
+        self.agents = [AgentNetwork(num_agents, state_size, action_size, seed,
                                     lr_actor=lr_actor, lr_critic=lr_critic) for i in range(num_agents)]
 
         # Noise process
@@ -161,19 +159,17 @@ class Agent():
 
         # y = reward of this timestep + discount * Q(st+1,at+1) from target network
         target_actions = self.target_act(next_states)
-        target_critic_input = torch.cat([next_states.view(self.batch_size, -1), target_actions.view(self.batch_size, -1)], dim=1).to(device)
         with torch.no_grad():
-            q_next = agent.target_critic(target_critic_input)
+            q_next = agent.target_critic(next_states.view(self.batch_size, -1), target_actions.view(self.batch_size, -1))
         y = rewards_i + self.gamma * q_next * (1 - dones_i)
 
         # Q(s,a)
-        critic_input = torch.cat([states.view(self.batch_size, -1), actions.view(self.batch_size, -1)], dim=1).to(device)
-        q = agent.critic(critic_input)
+        q = agent.critic(states.view(self.batch_size, -1), actions.view(self.batch_size, -1))
 
         # critic loss
-        #huber_loss = torch.nn.SmoothL1Loss()
-        #critic_loss = huber_loss(q, y.detach())
-        critic_loss = F.mse_loss(q, y.detach())
+        huber_loss = torch.nn.SmoothL1Loss()
+        critic_loss = huber_loss(q, y.detach())
+        #critic_loss = F.mse_loss(q, y.detach())
         agent.critic_loss = critic_loss
         critic_loss.backward()
         if self.clip_critic > 0:
@@ -182,18 +178,16 @@ class Agent():
         
         #update actor network using policy gradient
         agent.actor_optimizer.zero_grad()
-
-        # make input to agent
-        q_input = [self.agents[i].actor(states[:,i]) if i == agent_number
-                   else self.agents[i].actor(states[:,i]).detach()
-                   for i in range(self.num_agents)]
-        q_input = torch.stack(q_input, dim=-1).to(device)
-
-        # combine all the actions and observations for input to critic
-        q_input = torch.cat([states.view(self.batch_size, -1), q_input.view(self.batch_size, -1)], dim=1).to(device)
         
-        # get the policy gradient
-        actor_loss = -agent.critic(q_input).mean()
+        # collect new actions
+#        actions2 = [self.agents[i].actor(states[:,i]) if i == agent_number
+#                    else self.agents[i].actor(states[:,i]).detach()
+#                    for i in range(self.num_agents)]
+#        actions2 = torch.stack(actions2, dim=-1).to(device)
+        actions2 = actions.clone()
+        actions2[:,agent_number] = agent.actor(states_i)
+        
+        actor_loss = -agent.critic(states.view(self.batch_size, -1), actions2.view(self.batch_size, -1)).mean()
         agent.actor_loss = actor_loss
         actor_loss.backward()
         #torch.nn.utils.clip_grad_norm_(agent.actor.parameters(),0.5)
