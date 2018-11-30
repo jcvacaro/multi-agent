@@ -81,14 +81,13 @@ class Agent():
         self.checkpoint_prefix = checkpoint_prefix
 
         # Agents
-        critic_size = num_agents * (action_size + state_size)
         self.agents = [AgentNetwork(num_agents, state_size, action_size, seed,
                                     lr_actor=lr_actor, lr_critic=lr_critic) for i in range(num_agents)]
 
         # Noise process
         self.noise = torch.tensor(noise, dtype=torch.float).to(device)
         self.noise_decay = torch.tensor(noise_decay, dtype=torch.float).to(device)
-        self.ounoise = OUNoise(action_size, scale=1.0)
+        self.ounoise = OUNoise(action_size, seed)
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -133,18 +132,18 @@ class Agent():
             actions = actions.cpu().data.numpy()
         return actions
         
-    def act(self, state):
+    def act(self, state, add_noise=True, to_numpy=True):
         """get actions from all agents in the MADDPG object"""
         actors = self.get_actors()
         for actor in actors: actor.eval()
         with torch.no_grad():
-            actions = self._act(actors, state, add_noise=False, to_numpy=True)
+            actions = self._act(actors, state, add_noise, to_numpy)
         for actor in actors: actor.train()
         return actions
 
-    def target_act(self, state, add_noise=True, to_numpy=True):
+    def target_act(self, state, add_noise=True, to_numpy=False):
         """get actions from all agents in the MADDPG object"""
-        return self._act(self.get_target_actors(), state, add_noise=True, to_numpy=False)
+        return self._act(self.get_target_actors(), state, add_noise, to_numpy)
 
     def learn(self, experiences, agent_number):
         """update the critics and actors of all the agents """
@@ -167,9 +166,9 @@ class Agent():
         q = agent.critic(states.view(self.batch_size, -1), actions.view(self.batch_size, -1))
 
         # critic loss
-        huber_loss = torch.nn.SmoothL1Loss()
-        critic_loss = huber_loss(q, y.detach())
-        #critic_loss = F.mse_loss(q, y.detach())
+        #huber_loss = torch.nn.SmoothL1Loss()
+        #critic_loss = huber_loss(q, y.detach())
+        critic_loss = F.mse_loss(q, y.detach())
         agent.critic_loss = critic_loss
         critic_loss.backward()
         if self.clip_critic > 0:
@@ -180,10 +179,6 @@ class Agent():
         agent.actor_optimizer.zero_grad()
         
         # collect new actions
-#        actions2 = [self.agents[i].actor(states[:,i]) if i == agent_number
-#                    else self.agents[i].actor(states[:,i]).detach()
-#                    for i in range(self.num_agents)]
-#        actions2 = torch.stack(actions2, dim=-1).to(device)
         actions2 = actions.clone()
         actions2[:,agent_number] = agent.actor(states_i)
         
