@@ -118,32 +118,31 @@ class Agent():
         """get target_actors of all the agents in the MADDPG object"""
         return [agent.target_actor for agent in self.agents]
 
-    def _act(self, actors, state, add_noise=True, to_numpy=True):
+    def _act(self, actors, state, add_noise=True):
         """get actions from all agents in the MADDPG object"""
-        if to_numpy:
-            state = torch.from_numpy(state).float().to(device)
         action_list = [actor(state[:,i]) for i,actor in enumerate(actors)]
         # convert from list([batch, data], ...)  to tensor([batch, agent, data])
         actions = torch.stack(action_list, dim=-1).to(device)
         if add_noise:
-            actions += self.noise * torch.tensor(self.ounoise.noise(), dtype=torch.float).to(device)
+            actions += self.noise * torch.tensor(self.ounoise.sample(), dtype=torch.float).to(device)
         actions = torch.clamp(actions, -1, 1).to(device)
-        if to_numpy:
-            actions = actions.cpu().data.numpy()
         return actions
         
     def act(self, state, add_noise=True, to_numpy=True):
         """get actions from all agents in the MADDPG object"""
+        states = states[np.newaxis,:]                       # add batch dimension
+        state = torch.from_numpy(state).float().to(device)  # send to GPU
         actors = self.get_actors()
-        for actor in actors: actor.eval()
+        for actor in actors: actor.eval()                   # go to evaluation mode
         with torch.no_grad():
-            actions = self._act(actors, state, add_noise, to_numpy)
-        for actor in actors: actor.train()
-        return actions
+            actions = self._act(actors, state, add_noise)
+        for actor in actors: actor.train()                  # back to training mode
+        actions = actions.cpu().data.numpy()                # to numpy
+        return actions[0]                                   # remove batch dimension
 
-    def target_act(self, state, add_noise=True, to_numpy=False):
+    def target_act(self, state, add_noise=False):
         """get actions from all agents in the MADDPG object"""
-        return self._act(self.get_target_actors(), state, add_noise, to_numpy)
+        return self._act(self.get_target_actors(), state, add_noise)
 
     def learn(self, experiences, agent_number):
         """update the critics and actors of all the agents """

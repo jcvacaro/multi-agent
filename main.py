@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import utils
 from memory import UniformReplayBuffer
 import maddpg_agent as maddpg
+import ddpg_agent as ddpg
 
 # Arguments Parsing Settings
 parser = argparse.ArgumentParser(description="DQN Reinforcement Learning Agent")
@@ -20,7 +21,7 @@ parser.add_argument('--checkpoint_prefix', help="The string prefix for saving ch
 
 # training/testing flags
 parser.add_argument('--train', help="train or test (flag)", action="store_true")
-parser.add_argument('--algorithm', choices=["maddpg"], help="The algorithm", default="maddpg")
+parser.add_argument('--algorithm', choices=["maddpg","ddpg"], help="The algorithm", default="maddpg")
 parser.add_argument('--test_episodes', help="The number of episodes for testing", type=int, default=3)
 parser.add_argument('--train_episodes', help="The number of episodes for training", type=int, default=3500)
 parser.add_argument('--batch_size', help="The mini batch size", type=int, default=128)
@@ -108,8 +109,7 @@ def train(agent, env, brain, brain_name, num_agents, n_episodes):
 
         while True:
             # agent chooses an action
-            states_batch = states[np.newaxis,:]                 # add batch dim to states
-            actions = agent.act(states_batch)[0]                      # remove batch dim from actions
+            actions = agent.act(states)
             
             # interact with the environment
             env_info = env.step(actions)[brain_name]            # send all actions to tne environment
@@ -155,11 +155,7 @@ def save_checkpoint(agent, scores_episodes, scores_window):
 
 if __name__ == '__main__':
     args = parser.parse_args()
-    
-    # seeding
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    
+
     # environment
     env, brain, brain_name, num_agents, action_size, state_size = create_environment(no_graphics=args.train)
 
@@ -190,6 +186,21 @@ if __name__ == '__main__':
                              update_network_steps=args.update_network_steps,
                              sgd_epoch=args.sgd_epoch,
                              checkpoint_prefix=args.checkpoint_prefix)
+    elif args.algorithm == "ddpg":
+        agent = ddpg.Agent(state_size=state_size, 
+                           action_size=action_size, 
+                           seed=args.seed,
+                           batch_size=args.batch_size,
+                           memory=memory,
+                           lr_actor=args.lr_actor,
+                           lr_critic=args.lr_critic,
+                           clip_critic=args.clip_critic,
+                           gamma=args.gamma,
+                           tau=args.tau,
+                           weight_decay=args.weight_decay,
+                           update_network_steps=args.update_network_steps,
+                           sgd_epoch=args.sgd_epoch,
+                           checkpoint_prefix=args.checkpoint_prefix)
 
     if args.train:
         train(agent, env, brain, brain_name, num_agents, n_episodes=args.train_episodes)
