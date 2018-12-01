@@ -128,9 +128,9 @@ class Agent():
         actions = torch.clamp(actions, -1, 1).to(device)
         return actions
         
-    def act(self, state, add_noise=True, to_numpy=True):
+    def act(self, state, add_noise=True):
         """get actions from all agents in the MADDPG object"""
-        states = states[np.newaxis,:]                       # add batch dimension
+        state = state[np.newaxis,:]                       # add batch dimension
         state = torch.from_numpy(state).float().to(device)  # send to GPU
         actors = self.get_actors()
         for actor in actors: actor.eval()                   # go to evaluation mode
@@ -147,14 +147,9 @@ class Agent():
     def learn(self, experiences, agent_number):
         """update the critics and actors of all the agents """
         states, actions, rewards, next_states, dones = experiences
-        rewards = normalize_rewards(rewards)
-        states_i, actions_i, rewards_i, next_states_i, dones_i = \
-            states[:,agent_number], actions[:,agent_number], rewards[:,agent_number], next_states[:,agent_number], dones[:,agent_number]
+        states_i, actions_i, rewards_i, next_states_i, dones_i = map(lambda x: x[:,agent_number], experiences)
         agent = self.agents[agent_number]
         
-        # critic loss = batch mean of (y- Q(s,a) from target network)^2
-        agent.critic_optimizer.zero_grad()
-
         # y = reward of this timestep + discount * Q(st+1,at+1) from target network
         target_actions = self.target_act(next_states)
         with torch.no_grad():
@@ -164,9 +159,8 @@ class Agent():
         # Q(s,a)
         q = agent.critic(states.view(self.batch_size, -1), actions.view(self.batch_size, -1))
 
-        # critic loss
-        #huber_loss = torch.nn.SmoothL1Loss()
-        #critic_loss = huber_loss(q, y.detach())
+        # critic loss = batch mean of (y- Q(s,a) from target network)^2
+        agent.critic_optimizer.zero_grad()
         critic_loss = F.mse_loss(q, y.detach())
         agent.critic_loss = critic_loss
         critic_loss.backward()
@@ -174,17 +168,15 @@ class Agent():
             torch.nn.utils.clip_grad_norm_(agent.critic.parameters(), self.clip_critic)
         agent.critic_optimizer.step()
         
-        #update actor network using policy gradient
-        agent.actor_optimizer.zero_grad()
-        
         # collect new actions
         actions2 = actions.clone()
         actions2[:,agent_number] = agent.actor(states_i)
         
+        #update actor network using policy gradient
+        agent.actor_optimizer.zero_grad()
         actor_loss = -agent.critic(states.view(self.batch_size, -1), actions2.view(self.batch_size, -1)).mean()
         agent.actor_loss = actor_loss
         actor_loss.backward()
-        #torch.nn.utils.clip_grad_norm_(agent.actor.parameters(),0.5)
         agent.actor_optimizer.step()
 
     def update_targets(self):
