@@ -78,7 +78,7 @@ def test(agent, env, brain, brain_name, num_agents, n_episodes):
 
         while True:
             # agent chooses an action
-            actions, action_probs = agent.act(states)
+            actions = agent.act(states, add_noise=False)
             
             # interact with the environment
             env_info = env.step(actions)[brain_name]            # send all actions to tne environment
