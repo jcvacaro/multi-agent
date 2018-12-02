@@ -45,38 +45,37 @@ To train the agent:
 python main.py --train \
     --algorithm=ddpg \
      --checkpoint_prefix=Tennis_ddpg \
-     --train_episodes=15000 \
+     --train_episodes=10000 \
      --gamma=0.95 \
      --tau=0.01 \
     --lr_actor=1e-4 \
     --lr_critic=1e-3 \
     --weight_decay=25e-5 \
     --clip_critic=0.2 \
-    --noise=1 \
     --batch_size=1024 \
     --update_network_steps=2 \
     --sgd_epoch=1
 ```
 
-This command configures the agent to use the DDPG algorithm. The training runs 15000 episodes, and saves the model checkpoint in the current directory if the goal is achieved.
+This command configures the agent to use the DDPG algorithm. The training runs 10000 episodes, and saves the model checkpoint in the current directory if the goal is achieved.
 
-To use the MADDPG algorithm instead:
+To use the MADDPG algorithm instead (experimental):
 
 ```bash
 python main.py --train \
     --algorithm=maddpg \
      --checkpoint_prefix=Tennis_maddpg \
-     --train_episodes=15000 \
+     --train_episodes=10000 \
      --gamma=0.95 \
      --tau=0.01 \
     --lr_actor=1e-4 \
     --lr_critic=1e-3 \
     --weight_decay=25e-5 \
     --clip_critic=0.2 \
-    --noise=1 \
+    --batch_norm \
     --batch_size=1024 \
-    --update_network_steps=2 \
-    --sgd_epoch=1
+    --update_network_steps=8 \
+    --sgd_epoch=8
 ```
 
 To test the agent using the DDPG model checkpoint:
