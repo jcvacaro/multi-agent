@@ -38,7 +38,7 @@ There are 4 networks involved in DDPG: the local actor, the local critic, the ta
 
 Training the agent on the target environment was really involving. The following techniques contributed to the stability of the algorithm significantly:
 
-- Increasing the batch size: Going from 128 to 1025 reduced the noise in the actor and critic loss. That is probably because a more significant sampling is performed from the total entries in the replay memory.
+- Increasing the batch size: Going from 128 to 1024 reduced the noise in the actor and critic loss. That is probably because a more significant sampling is performed from the total entries in the replay memory.
 - Clipping the critic gradients: It is very clear the relationship between the critic and the actor loss, and of course that impacts the rewards. So, since the critic guides the actor gradient updates, reducing the variance of the critic improves the whole system. The goal is to use a clip function in the gradients to eliminate extreme updates in the critic network.
 - Choosing the weight decay value for the optimizer: Here the actor loss plot helped a lot. The loss started very well decreasing over time, but after a certain number of episodes it diverged completely by increasing its value. The weight decay was criticaly important for solving this problem. By decreasing the learning rate during the optimization step probably contributed for the network to reach a better local minimum. 
 
@@ -72,7 +72,7 @@ The critic represents the Q-value function Q(s, a). The action is incorporated i
 
 ## Results
 
-The environment was solved using the DDPG algorithm. The goal was achieve in 7142 episodes. The following graphs show the reward progression of the entire training, as well as the last 100 episodes where the agent achieved +0.51 points.
+The environment was solved using the DDPG algorithm. The goal was achieve in 1291 episodes. The following graphs show the reward progression of the entire training, as well as the last 100 episodes where the agent achieved +0.51 points.
 
 ![Agent Training][image1]
 ![Agent Training 100 Episodes][image2]
