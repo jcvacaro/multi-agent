@@ -14,13 +14,13 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 class AgentNetwork:
     """Individual network settings for each actor + critic pair."""
 
-    def __init__(self, num_agents, state_size, action_size, seed, lr_actor, lr_critic):
+    def __init__(self, num_agents, state_size, action_size, seed, batch_norm, lr_actor, lr_critic):
         super(AgentNetwork, self).__init__()
 
-        self.actor = Actor(state_size, action_size, seed).to(device)
-        self.critic = Critic(num_agents * state_size, num_agents * action_size, seed).to(device)
-        self.target_actor = Actor(state_size, action_size, seed).to(device)
-        self.target_critic = Critic(num_agents * state_size, num_agents * action_size, seed).to(device)
+        self.actor = Actor(state_size, action_size, seed, batch_norm).to(device)
+        self.critic = Critic(num_agents * state_size, num_agents * action_size, seed, batch_norm).to(device)
+        self.target_actor = Actor(state_size, action_size, seed, batch_norm).to(device)
+        self.target_critic = Critic(num_agents * state_size, num_agents * action_size, seed, batch_norm).to(device)
 
         # initialize targets same as original networks
         hard_update(self.target_actor, self.actor)
@@ -38,7 +38,7 @@ class AgentNetwork:
 class Agent():
     """Interacts with and learns from the environment."""
     
-    def __init__(self, num_agents, state_size, action_size, noise, noise_decay, seed, memory, batch_size, lr_actor, lr_critic, clip_critic, gamma, tau, weight_decay, update_network_steps, sgd_epoch, checkpoint_prefix):
+    def __init__(self, num_agents, state_size, action_size, seed, memory, batch_size, lr_actor, lr_critic, clip_actor, clip_critic, batch_norm, gamma, tau, weight_decay, update_network_steps, sgd_epoch, checkpoint_prefix):
         """Initialize an Agent object.
         
         Params
@@ -46,14 +46,14 @@ class Agent():
             num_agents (int): The number of agents
             state_size (int): dimension of each state
             action_size (int): dimension of each action
-            noise (float): The amplitude of OU noise for action exploration
-            noise_decay (float): The noise reduction value
             seed (int): random seed
             memory (ReplayBuffer): The replay buffer for storing xperiences
             batch_size (int): Number of experiences to sample from the memory
             lr_actor (float): The learning rate for the actor
             lr_critic (float): The learning rate critic
+            clip_actor (float): The clip value for updating grads
             clip_critic (float): The clip value for updating grads
+            batch_norm (bool): To use batch normalization
             gamma (float): The reward discount factor
             tau (float): For soft update of target parameters
             weight_decay (float): The weight decay
@@ -69,7 +69,9 @@ class Agent():
         self.batch_size = batch_size
         self.lr_actor = lr_actor
         self.lr_critic = lr_critic
+        self.clip_actor = clip_actor
         self.clip_critic = clip_critic
+        self.batch_norm = batch_norm
         self.gamma = gamma
         self.tau = tau
         self.weight_decay = weight_decay
@@ -81,13 +83,11 @@ class Agent():
         self.checkpoint_prefix = checkpoint_prefix
 
         # Agents
-        self.agents = [AgentNetwork(num_agents, state_size, action_size, seed,
+        self.agents = [AgentNetwork(num_agents, state_size, action_size, seed, batch_norm,
                                     lr_actor=lr_actor, lr_critic=lr_critic) for i in range(num_agents)]
 
         # Noise process
-        self.noise = torch.tensor(noise, dtype=torch.float).to(device)
-        self.noise_decay = torch.tensor(noise_decay, dtype=torch.float).to(device)
-        self.ounoise = OUNoise(action_size, seed)
+        self.noise = OUNoise(action_size, seed)
 
     def step(self, state, action, reward, next_state, done):
         """Save experience in replay memory, and use random sample from buffer to learn."""
@@ -107,8 +107,7 @@ class Agent():
                     self.update_targets()
 
     def reset(self):
-        self.ounoise.reset()
-        self.noise *= self.noise_decay
+        self.noise.reset()
 
     def get_actors(self):
         """get actors of all the agents in the MADDPG object"""
@@ -118,31 +117,33 @@ class Agent():
         """get target_actors of all the agents in the MADDPG object"""
         return [agent.target_actor for agent in self.agents]
 
-    def _act(self, actors, state, add_noise=True):
+    def _act(self, actors, state):
         """get actions from all agents in the MADDPG object"""
         action_list = [actor(state[:,i]) for i,actor in enumerate(actors)]
         # convert from list([batch, data], ...)  to tensor([batch, agent, data])
         actions = torch.stack(action_list, dim=-1).to(device)
-        if add_noise:
-            actions += self.noise * torch.tensor(self.ounoise.sample(), dtype=torch.float).to(device)
-        actions = torch.clamp(actions, -1, 1).to(device)
         return actions
         
     def act(self, state, add_noise=True):
         """get actions from all agents in the MADDPG object"""
         state = state[np.newaxis,:]                       # add batch dimension
         state = torch.from_numpy(state).float().to(device)  # send to GPU
+
         actors = self.get_actors()
         for actor in actors: actor.eval()                   # go to evaluation mode
         with torch.no_grad():
-            actions = self._act(actors, state, add_noise)
+            actions = self._act(actors, state)
         for actor in actors: actor.train()                  # back to training mode
-        actions = actions.cpu().data.numpy()                # to numpy
-        return actions[0]                                   # remove batch dimension
 
-    def target_act(self, state, add_noise=False):
+        actions = actions.cpu().data.numpy()                # to numpy
+        actions = actions[0]                                # remove batch dimension
+        if add_noise:
+            actions += self.noise.sample()
+        return np.clip(actions, -1, 1)
+
+    def target_act(self, state):
         """get actions from all agents in the MADDPG object"""
-        return self._act(self.get_target_actors(), state, add_noise)
+        return self._act(self.get_target_actors(), state)
 
     def learn(self, experiences, agent_number):
         """update the critics and actors of all the agents """
@@ -150,6 +151,9 @@ class Agent():
         states_i, actions_i, rewards_i, next_states_i, dones_i = map(lambda x: x[:,agent_number], experiences)
         agent = self.agents[agent_number]
         
+        # reward normalization
+        #rewards_i = normalize_rewards(rewards_i)
+
         # y = reward of this timestep + discount * Q(st+1,at+1) from target network
         target_actions = self.target_act(next_states)
         with torch.no_grad():
@@ -177,6 +181,8 @@ class Agent():
         actor_loss = -agent.critic(states.view(self.batch_size, -1), actions2.view(self.batch_size, -1)).mean()
         agent.actor_loss = actor_loss
         actor_loss.backward()
+        if self.clip_actor > 0:
+            torch.nn.utils.clip_grad_norm_(agent.actor.parameters(), self.clip_actor)
         agent.actor_optimizer.step()
 
     def update_targets(self):

@@ -23,17 +23,17 @@ parser.add_argument('--checkpoint_prefix', help="The string prefix for saving ch
 parser.add_argument('--train', help="train or test (flag)", action="store_true")
 parser.add_argument('--algorithm', choices=["maddpg","ddpg"], help="The algorithm", default="maddpg")
 parser.add_argument('--test_episodes', help="The number of episodes for testing", type=int, default=3)
-parser.add_argument('--train_episodes', help="The number of episodes for training", type=int, default=3500)
-parser.add_argument('--batch_size', help="The mini batch size", type=int, default=128)
-parser.add_argument('--noise', help="The amplitude of OU noise for action exploration", type=float, default=0)
-parser.add_argument('--noise_decay', help="The noise coefficient decay", type=float, default=0.9999)
-parser.add_argument('--gamma', help="The reward discount factor", type=float, default=0.99)
+parser.add_argument('--train_episodes', help="The number of episodes for training", type=int, default=10000)
+parser.add_argument('--batch_size', help="The mini batch size", type=int, default=1024)
+parser.add_argument('--gamma', help="The reward discount factor", type=float, default=0.95)
 parser.add_argument('--lr_actor', help="The learning rate for the actor", type=float, default=1e-4)
 parser.add_argument('--lr_critic', help="The learning rate for the critic", type=float, default=1e-3)
-parser.add_argument('--clip_critic', help="The clip value for updating grads", type=float, default=1)
-parser.add_argument('--tau', help="For soft update of target parameters", type=float, default=0.02)
+parser.add_argument('--clip_actor', help="The clip value for updating grads", type=float, default=0.2)
+parser.add_argument('--clip_critic', help="The clip value for updating grads", type=float, default=0.2)
+parser.add_argument('--batch_norm', help="To use batch normalization (flag)", action="store_true")
+parser.add_argument('--tau', help="For soft update of target parameters", type=float, default=0.01)
 parser.add_argument('--weight_decay', help="The weight decay", type=float, default=25e-5)
-parser.add_argument('--update_network_steps', help="How often to update the network", type=int, default=1)
+parser.add_argument('--update_network_steps', help="How often to update the network", type=int, default=2)
 parser.add_argument('--sgd_epoch', help="Number of iterations for each network update", type=int, default=1)
 
 # replay memory 
@@ -172,14 +172,14 @@ if __name__ == '__main__':
         agent = maddpg.Agent(num_agents=num_agents,
                              state_size=state_size, 
                              action_size=action_size, 
-                             noise=args.noise,
-                             noise_decay=args.noise_decay,
                              seed=args.seed,
                              batch_size=args.batch_size,
                              memory=memory,
                              lr_actor=args.lr_actor,
                              lr_critic=args.lr_critic,
+                             clip_actor=args.clip_actor,
                              clip_critic=args.clip_critic,
+                             batch_norm=args.batch_norm,
                              gamma=args.gamma,
                              tau=args.tau,
                              weight_decay=args.weight_decay,
