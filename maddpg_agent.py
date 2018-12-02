@@ -121,7 +121,7 @@ class Agent():
         """get actions from all agents in the MADDPG object"""
         action_list = [actor(state[:,i]) for i,actor in enumerate(actors)]
         # convert from list([batch, data], ...)  to tensor([batch, agent, data])
-        actions = torch.stack(action_list, dim=-1).to(device)
+        actions = torch.stack(action_list, dim=1).to(device)
         return actions
         
     def act(self, state, add_noise=True):
