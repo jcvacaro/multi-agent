@@ -2,8 +2,8 @@
 
 [image1]: https://drive.google.com/uc?id=1JSrqS-ZUN9k4reNSdBxSxAlGt04jkA8h "Agent Training"
 [image2]: https://drive.google.com/uc?id=1PK-b9DjV-wmPhbqTl_zoVbj-9vBXIdEZ "Agent Training 100 Episodes"
-[image3]: https://drive.google.com/open?id=1XrRuwh7trawIMMiKR_uSvPNnyQ5r6Euf "MADDPG Agent Training"
-[image4]: https://drive.google.com/open?id=1GLNXKCWVjYLHw4HB4ErDPDnp5Ijc7oX_  "MADDPG Agent Training 100 Episodes"
+[image3]: https://drive.google.com/uc?id=1XrRuwh7trawIMMiKR_uSvPNnyQ5r6Euf "MADDPG Agent Training"
+[image4]: https://drive.google.com/uc?id=1GLNXKCWVjYLHw4HB4ErDPDnp5Ijc7oX_  "MADDPG Agent Training 100 Episodes"
 
 # Report
 
