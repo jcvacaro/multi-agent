@@ -27,8 +27,9 @@ The source code is implemented in Python 3x, and uses PyTorch as the Machine Lea
     - Docker: See the Dockerfile for instructions about how to generate the image
 2. Download the environment from one of the links below. You need only select the environment that matches your operating system:
     - [Linux](https://drive.google.com/uc?id=1UF_rA9HkMF3TnEB4IDkFJ30DRDO-yuAB), [Windows 64-bit](https://drive.google.com/uc?id=1TgV2f1Fqj2UJnqad3S5r6LbmZdBG4RJt)
-3. To test the agent with a pre-trained DDPG network, download the model checkpoint:
-    - [Actor](https://drive.google.com/uc?id=1qUK_Xax6M92Y2J-071uKAnE0H-cvmMPt), [Critic](https://drive.google.com/uc?id=1IiZtLqG5ZLJW1H5VbJiWvaT7A7vmk02T)
+3. To test the agent with a pre-trained network, download the model checkpoint:
+    - DDPG: [Actor](https://drive.google.com/uc?id=1qUK_Xax6M92Y2J-071uKAnE0H-cvmMPt), [Critic](https://drive.google.com/uc?id=1IiZtLqG5ZLJW1H5VbJiWvaT7A7vmk02T)
+    - MADDPG: [Actor0](https://drive.google.com/uc?id=1zZjAyUjXRK_Eho0byB77m9JwIHbijmCg), [Critic0](https://drive.google.com/uc?id=1zCXDrzJdQkOEursCqBpc9x872SCDyaOA), [Actor1](https://drive.google.com/uc?id=1y6S-pSiBo5lYgeTAxjxLs-xEhdES7lES), [Critic1](https://drive.google.com/uc?id=1oFRB0BNGZ56rymX_4NCi15QfVDyQFyK1)
 4. Place the file(s) in the repository folder, and unzip (or decompress) the file(s).
 
 ## Instructions
@@ -59,20 +60,21 @@ python main.py --train \
 
 This command configures the agent to use the DDPG algorithm. The training runs 10000 episodes, and saves the model checkpoint in the current directory if the goal is achieved.
 
-To use the MADDPG algorithm instead (experimental):
+To use the MADDPG algorithm instead:
 
 ```bash
 python main.py --train \
     --algorithm=maddpg \
      --checkpoint_prefix=Tennis_maddpg \
-     --train_episodes=10000 \
+     --train_episodes=8000 \
+     --seed=1 \
      --gamma=0.95 \
      --tau=0.01 \
     --lr_actor=1e-4 \
     --lr_critic=1e-3 \
-    --weight_decay=25e-5 \
+    --weight_decay=1e-4 \
+    --clip_actor=0 \
     --clip_critic=0.2 \
-    --batch_norm \
     --batch_size=1024 \
     --update_network_steps=8 \
     --sgd_epoch=8
@@ -85,6 +87,15 @@ python main.py \
     --algorithm=ddpg \
     --test_episodes=1 \
     --checkpoint_prefix=Tennis_ddpg
+```
+
+To test the agent using the MADDPG model checkpoint:
+
+```bash
+python main.py \
+    --algorithm=maddpg \
+    --test_episodes=1 \
+    --checkpoint_prefix=Tennis_maddpg
 ```
 
 In addition, many hyper parameters can be customized such as the learning rate, the reward discount factor gamma. Check the --help for all available options.
